@@ -1,3 +1,4 @@
+
 """
 THE MOUNTAIN PATH - WORLD OF FINANCE
 Principal Component Analysis (PCA) - Interactive Learning App
@@ -13,6 +14,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
+import io
 
 # =============================================================================
 # PAGE CONFIG & MOUNTAIN PATH DESIGN
@@ -297,12 +299,13 @@ mountain_header(
     "A Complete Interactive Learning Guide — From Intuition to Implementation"
 )
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📖 Basics",
     "🧠 Concepts & Math",
     "📊 Interactive Illustrations",
     "🏠 Case Study",
-    "🧪 Try It Yourself"
+    "🧪 Try It Yourself",
+    "🔬 Lab Exercise"
 ])
 
 
@@ -1169,5 +1172,618 @@ with tab5:
 
     except np.linalg.LinAlgError:
         warn_box("Could not generate data with this correlation. Try a lower value.")
+
+    footer()
+
+
+# =============================================================================
+# TAB 6: LAB EXERCISE — Upload Your Own Data
+# =============================================================================
+with tab6:
+    st.markdown("## 🔬 Lab Exercise: MLR vs PCA on Your Own Data")
+
+    insight_box("How This Lab Works",
+        "<strong>Step 1:</strong> Download the Excel template (50 rows, Y + X1–X5 with realistic correlated data).<br>"
+        "<strong>Step 2:</strong> Open in Excel — modify values, add rows, change correlations, or replace with your own data.<br>"
+        "<strong>Step 3:</strong> Upload the amended file here.<br>"
+        "<strong>Step 4:</strong> The app runs <em>ordinary MLR</em> and then <em>PCA → PCR</em> and shows you the difference side-by-side.")
+
+    st.markdown("---")
+
+    # =========================================================================
+    # STEP 1: GENERATE & DOWNLOAD DEFAULT TEMPLATE
+    # =========================================================================
+    st.markdown("### 📥 Step 1 — Download the Default Template")
+
+    @st.cache_data
+    def generate_default_template():
+        """Generate a 50-row dataset with Y and 5 correlated X variables."""
+        np.random.seed(2024)
+        n = 50
+
+        # Create correlated base signals
+        base_size = np.random.normal(2000, 500, n)       # house size driver
+        base_quality = np.random.normal(0, 1, n)          # quality driver
+        base_age = np.random.normal(20, 10, n)            # age driver
+
+        # X1: Size (sqft) — driven by base_size
+        X1 = np.clip(base_size + np.random.normal(0, 80, n), 600, 5000).round(0)
+
+        # X2: Bedrooms — highly correlated with size
+        X2 = np.clip((X1 / 600 + np.random.normal(0, 0.4, n)), 1, 7).round(0)
+
+        # X3: Age (years) — negatively correlated with size (newer houses tend to be bigger)
+        X3 = np.clip(50 - X1 / 80 + np.random.normal(0, 5, n), 1, 60).round(0)
+
+        # X4: Lot size (sqft) — very highly correlated with size
+        X4 = np.clip(X1 * 3.2 + np.random.normal(0, 300, n), 2000, 16000).round(0)
+
+        # X5: Garage spaces — correlated with size and quality
+        X5 = np.clip((X1 / 1000 + base_quality * 0.3 + np.random.normal(0, 0.3, n)), 0, 4).round(0)
+
+        # Y: Price ($000) — true relationship with noise
+        Y = (
+            50
+            + 0.08 * X1
+            + 12 * X2
+            - 1.5 * X3
+            + 0.01 * X4
+            + 18 * X5
+            + np.random.normal(0, 15, n)
+        ).round(1)
+
+        df = pd.DataFrame({
+            "Y_Price_k": Y,
+            "X1_Size_sqft": X1.astype(int),
+            "X2_Bedrooms": X2.astype(int),
+            "X3_Age_yrs": X3.astype(int),
+            "X4_Lot_sqft": X4.astype(int),
+            "X5_Garage": X5.astype(int),
+        })
+        return df
+
+    default_df = generate_default_template()
+
+    # Show preview
+    with st.expander("👀 Preview the default template data (first 10 rows)", expanded=True):
+        st.dataframe(default_df.head(10), use_container_width=True, hide_index=True)
+
+        # Quick stats
+        st.markdown("**Quick Statistics:**")
+        st.dataframe(default_df.describe().round(2), use_container_width=True)
+
+    # Create downloadable Excel
+    @st.cache_data
+    def create_excel_download(df):
+        """Create an Excel file in memory with formatting."""
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Data', index=False)
+
+            # Add an instructions sheet
+            instructions = pd.DataFrame({
+                "Instructions": [
+                    "THE MOUNTAIN PATH — PCA Lab Exercise Template",
+                    "",
+                    "Column Descriptions:",
+                    "  Y_Price_k    = House price in $000 (DEPENDENT variable)",
+                    "  X1_Size_sqft = House size in square feet",
+                    "  X2_Bedrooms  = Number of bedrooms",
+                    "  X3_Age_yrs   = Age of house in years",
+                    "  X4_Lot_sqft  = Lot size in square feet",
+                    "  X5_Garage    = Number of garage spaces",
+                    "",
+                    "How to use:",
+                    "  1. The 'Data' sheet has 50 rows of sample data.",
+                    "  2. You may modify any values, add rows, or replace entirely.",
+                    "  3. You may add more X columns (X6, X7, ...) — they will be auto-detected.",
+                    "  4. Keep the FIRST column as Y (the response variable).",
+                    "  5. All other columns are treated as X (predictor variables).",
+                    "  6. Upload the modified file back to the Streamlit app.",
+                    "",
+                    "Tips for experimenting:",
+                    "  • Make X1 and X4 nearly identical to see extreme multicollinearity.",
+                    "  • Set X5 to random values to see a low-VIF variable.",
+                    "  • Add 100+ rows to see how sample size affects stability.",
+                    "  • Try your own real-world dataset!",
+                    "",
+                    "Prof. V. Ravichandran | mountainpathacademy.com",
+                ]
+            })
+            instructions.to_excel(writer, sheet_name='Instructions', index=False, header=False)
+
+            # Format the Data sheet
+            workbook = writer.book
+            ws = workbook['Data']
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+            header_fill = PatternFill(start_color='003366', end_color='003366', fill_type='solid')
+            header_font = Font(name='Times New Roman', bold=True, color='FFFFFF', size=11)
+            cell_font = Font(name='Times New Roman', size=11)
+            thin_border = Border(
+                left=Side(style='thin'), right=Side(style='thin'),
+                top=Side(style='thin'), bottom=Side(style='thin'))
+
+            for cell in ws[1]:
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal='center')
+                cell.border = thin_border
+
+            for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+                for cell in row:
+                    cell.font = cell_font
+                    cell.alignment = Alignment(horizontal='center')
+                    cell.border = thin_border
+
+            # Y column highlight
+            y_fill = PatternFill(start_color='FFF9C4', end_color='FFF9C4', fill_type='solid')
+            for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=1):
+                for cell in row:
+                    cell.fill = y_fill
+
+            # Auto-width
+            for col in ws.columns:
+                max_len = max(len(str(cell.value or "")) for cell in col)
+                ws.column_dimensions[col[0].column_letter].width = max(max_len + 3, 14)
+
+            # Format Instructions sheet
+            ws2 = workbook['Instructions']
+            title_font = Font(name='Times New Roman', bold=True, size=14, color='003366')
+            body_font = Font(name='Times New Roman', size=11)
+            ws2.column_dimensions['A'].width = 70
+            for idx, row in enumerate(ws2.iter_rows(min_row=1, max_row=ws2.max_row)):
+                for cell in row:
+                    cell.font = title_font if idx == 0 else body_font
+
+        output.seek(0)
+        return output.getvalue()
+
+    excel_bytes = create_excel_download(default_df)
+
+    st.download_button(
+        label="⬇️  Download Excel Template (50 rows, Y + X1–X5)",
+        data=excel_bytes,
+        file_name="PCA_Lab_Template.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        type="primary"
+    )
+
+    st.markdown("---")
+
+    # =========================================================================
+    # STEP 2: UPLOAD FILE
+    # =========================================================================
+    st.markdown("### 📤 Step 2 — Upload Your (Modified) Excel File")
+
+    uploaded_file = st.file_uploader(
+        "Upload your .xlsx or .csv file",
+        type=["xlsx", "csv"],
+        help="First column = Y (response). All other columns = X (predictors)."
+    )
+
+    # Determine which data to use
+    if uploaded_file is not None:
+        if uploaded_file.name.endswith('.csv'):
+            user_df = pd.read_csv(uploaded_file)
+        else:
+            user_df = pd.read_excel(uploaded_file, sheet_name=0)
+        st.success(f"✅ Loaded **{uploaded_file.name}** — {user_df.shape[0]} rows × {user_df.shape[1]} columns")
+        data_source = "uploaded"
+    else:
+        user_df = default_df.copy()
+        data_source = "default"
+        st.info("ℹ️ No file uploaded yet. Using the **default template data** for the analysis below. "
+                "Upload your own file to see results on your data!")
+
+    # Clean: drop non-numeric columns
+    user_df = user_df.select_dtypes(include=[np.number]).dropna()
+
+    if user_df.shape[1] < 3:
+        st.error("❌ Need at least 1 Y column and 2 X columns (3 numeric columns minimum).")
+        st.stop()
+
+    # Split Y and X
+    y_col = user_df.columns[0]
+    x_cols = user_df.columns[1:]
+    Y = user_df[y_col].values
+    X = user_df[x_cols].values
+    n_obs, p_vars = X.shape
+
+    st.markdown(f"""
+    <div class="insight-box">
+        <h4>🔍 Data Summary</h4>
+        <p><strong>Source:</strong> {'Uploaded file: ' + uploaded_file.name if data_source == 'uploaded' else 'Default template'}<br>
+        <strong>Response (Y):</strong> {y_col} &nbsp;|&nbsp;
+        <strong>Predictors:</strong> {', '.join(x_cols)} &nbsp;|&nbsp;
+        <strong>Observations:</strong> {n_obs} &nbsp;|&nbsp;
+        <strong>Variables:</strong> {p_vars}</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.expander("📋 View full dataset"):
+        st.dataframe(user_df, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+
+    # =========================================================================
+    # STEP 3: RUN ANALYSIS
+    # =========================================================================
+    st.markdown("### ⚙️ Step 3 — Run the Analysis")
+
+    run_btn = st.button("🚀  Run MLR & PCA Comparison", type="primary", use_container_width=True)
+
+    if run_btn or st.session_state.get("lab_ran", False):
+        st.session_state["lab_ran"] = True
+
+        from sklearn.preprocessing import StandardScaler
+        from sklearn.decomposition import PCA as skPCA
+        from sklearn.linear_model import LinearRegression
+
+        # =================================================================
+        # PART A: ORDINARY MLR
+        # =================================================================
+        st.markdown("---")
+        st.markdown(f"""
+        <div style="background:{DARK_BLUE}; color:white; padding:0.8rem 1.2rem;
+                    border-radius:8px; margin-bottom:1rem;">
+            <h3 style="color:white; margin:0;">Part A: Ordinary Multiple Linear Regression</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+        mlr = LinearRegression().fit(X, Y)
+        mlr_pred = mlr.predict(X)
+        mlr_r2 = mlr.score(X, Y)
+        mlr_residuals = Y - mlr_pred
+        mlr_rmse = np.sqrt(np.mean(mlr_residuals**2))
+
+        # Adjusted R²
+        mlr_adj_r2 = 1 - (1 - mlr_r2) * (n_obs - 1) / (n_obs - p_vars - 1)
+
+        # VIF calculation
+        def compute_vif(X_matrix):
+            vifs = []
+            for j in range(X_matrix.shape[1]):
+                X_others = np.delete(X_matrix, j, axis=1)
+                r2_j = LinearRegression().fit(X_others, X_matrix[:, j]).score(X_others, X_matrix[:, j])
+                vif_j = 1 / (1 - r2_j) if r2_j < 1 else np.inf
+                vifs.append(vif_j)
+            return np.array(vifs)
+
+        vifs = compute_vif(X)
+
+        # Coefficient table
+        mlr_col1, mlr_col2 = st.columns([1.3, 1])
+
+        with mlr_col1:
+            st.markdown("#### MLR Coefficients & VIF")
+            coef_df = pd.DataFrame({
+                "Variable": list(x_cols),
+                "Coefficient (β)": [f"{c:.4f}" for c in mlr.coef_],
+                "VIF": [f"{v:.1f}" for v in vifs],
+                "VIF Status": ["✅ OK" if v < 5 else ("⚠️ Moderate" if v < 10 else "🚨 SEVERE!") for v in vifs]
+            })
+            st.dataframe(coef_df, use_container_width=True, hide_index=True)
+            st.markdown(f"**Intercept (β₀):** {mlr.intercept_:.4f}")
+
+        with mlr_col2:
+            st.markdown("#### MLR Metrics")
+            metric_card(f"{mlr_r2:.4f}", "R²")
+            st.markdown("")
+            metric_card(f"{mlr_adj_r2:.4f}", "Adjusted R²")
+            st.markdown("")
+            metric_card(f"{mlr_rmse:.2f}", "RMSE")
+
+        # Correlation heatmap
+        st.markdown("#### Predictor Correlation Matrix")
+        corr_mat = pd.DataFrame(X, columns=x_cols).corr()
+        fig_corr = go.Figure(data=go.Heatmap(
+            z=corr_mat.values, x=list(x_cols), y=list(x_cols),
+            colorscale=[[0, '#B71C1C'], [0.25, '#FFCDD2'], [0.5, 'white'],
+                        [0.75, '#BBDEFB'], [1, DARK_BLUE]],
+            zmid=0, zmin=-1, zmax=1,
+            text=[[f"{v:.3f}" for v in row] for row in corr_mat.values],
+            texttemplate="%{text}", textfont=dict(size=12)))
+        fig_corr.update_layout(
+            title="Correlation Matrix — Look for |r| > 0.8",
+            template="plotly_white", height=400,
+            font=dict(family="Times New Roman"),
+            yaxis=dict(autorange="reversed"))
+        st.plotly_chart(fig_corr, use_container_width=True)
+
+        # VIF bar chart
+        fig_vif = go.Figure()
+        vif_colors = [DARK_BLUE if v < 5 else (GOLD if v < 10 else '#B71C1C') for v in vifs]
+        fig_vif.add_trace(go.Bar(
+            x=list(x_cols), y=vifs, marker_color=vif_colors,
+            text=[f"{v:.1f}" for v in vifs], textposition='outside'))
+        fig_vif.add_hline(y=5, line_dash="dash", line_color=GOLD,
+            annotation_text="Moderate (VIF=5)")
+        fig_vif.add_hline(y=10, line_dash="dash", line_color="red",
+            annotation_text="Severe (VIF=10)")
+        fig_vif.update_layout(
+            title="VIF for Each Predictor — Higher = More Multicollinearity",
+            yaxis_title="VIF",
+            template="plotly_white", height=400,
+            font=dict(family="Times New Roman"))
+        st.plotly_chart(fig_vif, use_container_width=True)
+
+        high_vif = sum(1 for v in vifs if v > 10)
+        if high_vif > 0:
+            warn_box(f"<strong>{high_vif} variable(s) have VIF > 10!</strong> "
+                     "This confirms severe multicollinearity. MLR coefficients are unreliable. "
+                     "PCA will fix this — see Part B below.")
+        elif sum(1 for v in vifs if v > 5) > 0:
+            st.warning("⚠️ Some variables have moderate VIF (5–10). PCA may still improve stability.")
+        else:
+            gold_box("Low Multicollinearity",
+                "All VIFs are below 5. MLR coefficients are reasonably stable. "
+                "PCA is optional here — but let's compare anyway!")
+
+        # =================================================================
+        # PART B: PCA → PCR
+        # =================================================================
+        st.markdown("---")
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg, #7B6B00, #BFA200); color:white;
+                    padding:0.8rem 1.2rem; border-radius:8px; margin-bottom:1rem;">
+            <h3 style="color:white; margin:0;">Part B: PCA → Principal Component Regression</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+        scaler = StandardScaler()
+        X_std = scaler.fit_transform(X)
+
+        pca = skPCA()
+        pca.fit(X_std)
+        eigenvalues_lab = pca.explained_variance_
+        var_ratio_lab = pca.explained_variance_ratio_ * 100
+        cum_var_lab = np.cumsum(var_ratio_lab)
+
+        # Eigenvalue table
+        st.markdown("#### Eigenvalues & Explained Variance")
+        ev_lab_df = pd.DataFrame({
+            "PC": [f"PC{i+1}" for i in range(p_vars)],
+            "Eigenvalue (λ)": [f"{e:.4f}" for e in eigenvalues_lab],
+            "Variance %": [f"{v:.2f}%" for v in var_ratio_lab],
+            "Cumulative %": [f"{c:.2f}%" for c in cum_var_lab]
+        })
+        st.dataframe(ev_lab_df, use_container_width=True, hide_index=True)
+
+        # Choose k
+        st.markdown("#### Choose Number of Components (k)")
+        k_slider = st.slider(
+            "Variance threshold (%) — components are added until this is reached:",
+            min_value=70, max_value=99, value=90, step=1,
+            key="lab_k_slider"
+        )
+        k_chosen_lab = int(np.searchsorted(cum_var_lab, k_slider) + 1)
+        k_chosen_lab = min(k_chosen_lab, p_vars)
+
+        st.markdown(f"""
+        <div class="gold-box">
+            <h4>💡 Keeping k = {k_chosen_lab} component(s) out of {p_vars}
+            — captures {cum_var_lab[k_chosen_lab-1]:.1f}% of total variance</h4>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Scree plot
+        fig_scree = make_subplots(specs=[[{"secondary_y": True}]])
+        bar_colors = [DARK_BLUE if i < k_chosen_lab else LIGHT_BLUE for i in range(p_vars)]
+        fig_scree.add_trace(go.Bar(
+            x=[f"PC{i+1}" for i in range(p_vars)],
+            y=var_ratio_lab, marker_color=bar_colors,
+            text=[f"{v:.1f}%" for v in var_ratio_lab], textposition='outside',
+            name="Individual %"), secondary_y=False)
+        fig_scree.add_trace(go.Scatter(
+            x=[f"PC{i+1}" for i in range(p_vars)],
+            y=cum_var_lab, mode='lines+markers',
+            line=dict(color='red', width=3), marker=dict(size=8),
+            name="Cumulative %"), secondary_y=True)
+        fig_scree.add_hline(y=k_slider, line_dash="dash", line_color=GOLD,
+            secondary_y=True, annotation_text=f"{k_slider}% threshold")
+        fig_scree.update_yaxes(title_text="Individual %",
+            range=[0, max(var_ratio_lab)*1.3], secondary_y=False)
+        fig_scree.update_yaxes(title_text="Cumulative %", range=[0, 105], secondary_y=True)
+        fig_scree.update_layout(
+            title=f"Scree Plot — Dark = kept (k={k_chosen_lab}), Light = dropped",
+            template="plotly_white", height=450,
+            font=dict(family="Times New Roman"),
+            legend=dict(orientation="h", y=1.08))
+        st.plotly_chart(fig_scree, use_container_width=True)
+
+        # Loadings heatmap
+        loadings_lab = pca.components_[:k_chosen_lab].T  # shape: (p_vars, k_chosen)
+        fig_load = go.Figure(data=go.Heatmap(
+            z=loadings_lab,
+            x=[f"PC{i+1}" for i in range(k_chosen_lab)],
+            y=list(x_cols),
+            colorscale=[[0, '#B71C1C'], [0.25, '#FFCDD2'], [0.5, 'white'],
+                        [0.75, '#BBDEFB'], [1, DARK_BLUE]],
+            zmid=0, zmin=-1, zmax=1,
+            text=[[f"{v:.3f}" for v in row] for row in loadings_lab],
+            texttemplate="%{text}", textfont=dict(size=13)))
+        fig_load.update_layout(
+            title=f"Loadings Heatmap — How Original Variables Contribute to Each PC",
+            template="plotly_white", height=max(300, p_vars * 50),
+            font=dict(family="Times New Roman"),
+            yaxis=dict(autorange="reversed"))
+        st.plotly_chart(fig_load, use_container_width=True)
+
+        # Fit PCR
+        X_pc = pca.transform(X_std)[:, :k_chosen_lab]
+        pcr = LinearRegression().fit(X_pc, Y)
+        pcr_pred = pcr.predict(X_pc)
+        pcr_r2 = pcr.score(X_pc, Y)
+        pcr_residuals = Y - pcr_pred
+        pcr_rmse = np.sqrt(np.mean(pcr_residuals**2))
+        pcr_adj_r2 = 1 - (1 - pcr_r2) * (n_obs - 1) / (n_obs - k_chosen_lab - 1)
+
+        # PCR coefficients
+        st.markdown("#### PCR Coefficients")
+        pcr_coef_df = pd.DataFrame({
+            "Component": [f"PC{i+1}" for i in range(k_chosen_lab)],
+            "Coefficient (α)": [f"{c:.4f}" for c in pcr.coef_],
+            "Variance Captured": [f"{var_ratio_lab[i]:.1f}%" for i in range(k_chosen_lab)]
+        })
+        st.dataframe(pcr_coef_df, use_container_width=True, hide_index=True)
+
+        # =================================================================
+        # PART C: HEAD-TO-HEAD COMPARISON
+        # =================================================================
+        st.markdown("---")
+        st.markdown(f"""
+        <div style="background:linear-gradient(135deg, {DARK_BLUE}, #006644); color:white;
+                    padding:0.8rem 1.2rem; border-radius:8px; margin-bottom:1rem;">
+            <h3 style="color:white; margin:0;">Part C: Head-to-Head — MLR vs PCR</h3>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Side-by-side metrics
+        comp_col1, comp_col2 = st.columns(2)
+        with comp_col1:
+            st.markdown(f"""
+            <div class="metric-card">
+                <h2 style="color:{DARK_BLUE};">Ordinary MLR</h2>
+                <hr style="border-color:{DARK_BLUE};">
+                <p><strong>R²:</strong> {mlr_r2:.4f}</p>
+                <p><strong>Adj R²:</strong> {mlr_adj_r2:.4f}</p>
+                <p><strong>RMSE:</strong> {mlr_rmse:.2f}</p>
+                <p><strong>Predictors:</strong> {p_vars} (original)</p>
+                <p><strong>Max VIF:</strong> {max(vifs):.1f} {'🚨' if max(vifs)>10 else '⚠️' if max(vifs)>5 else '✅'}</p>
+                <p><strong>Multicollinear?</strong> {'YES' if max(vifs)>5 else 'No'}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        with comp_col2:
+            st.markdown(f"""
+            <div class="metric-card" style="border-color:{GOLD};">
+                <h2 style="color:#7B6B00;">PCR (k={k_chosen_lab})</h2>
+                <hr style="border-color:{GOLD};">
+                <p><strong>R²:</strong> {pcr_r2:.4f}</p>
+                <p><strong>Adj R²:</strong> {pcr_adj_r2:.4f}</p>
+                <p><strong>RMSE:</strong> {pcr_rmse:.2f}</p>
+                <p><strong>Predictors:</strong> {k_chosen_lab} (components)</p>
+                <p><strong>Max VIF:</strong> 1.0 ✅ (orthogonal by construction)</p>
+                <p><strong>Multicollinear?</strong> Impossible (PCs are orthogonal)</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Comparison table
+        st.markdown("#### Detailed Comparison")
+        comp_table = pd.DataFrame({
+            "Metric": ["R²", "Adjusted R²", "RMSE", "Number of Predictors",
+                       "Max VIF", "Multicollinearity?", "Coefficient Stability",
+                       "Interpretability"],
+            "Ordinary MLR": [
+                f"{mlr_r2:.4f}", f"{mlr_adj_r2:.4f}", f"{mlr_rmse:.2f}",
+                str(p_vars),
+                f"{max(vifs):.1f}", "YES" if max(vifs) > 5 else "Low",
+                "Unstable if VIF high" if max(vifs) > 5 else "Stable",
+                "Direct (per feature)"],
+            "PCR": [
+                f"{pcr_r2:.4f}", f"{pcr_adj_r2:.4f}", f"{pcr_rmse:.2f}",
+                str(k_chosen_lab),
+                "1.0 (always)", "NO (impossible)",
+                "Always stable",
+                "Abstract (use loadings)"]
+        })
+        st.dataframe(comp_table, use_container_width=True, hide_index=True)
+
+        # Actual vs Predicted — both models
+        st.markdown("#### Actual vs Predicted — Both Models Overlaid")
+        fig_avp = go.Figure()
+        fig_avp.add_trace(go.Scatter(
+            x=Y, y=mlr_pred, mode='markers', name=f'MLR (R²={mlr_r2:.4f})',
+            marker=dict(color=DARK_BLUE, size=9, symbol='circle', opacity=0.7)))
+        fig_avp.add_trace(go.Scatter(
+            x=Y, y=pcr_pred, mode='markers', name=f'PCR k={k_chosen_lab} (R²={pcr_r2:.4f})',
+            marker=dict(color=GOLD, size=11, symbol='diamond',
+                line=dict(color=DARK_BLUE, width=1.5), opacity=0.85)))
+        y_range = [min(Y)*0.9, max(Y)*1.1]
+        fig_avp.add_trace(go.Scatter(
+            x=y_range, y=y_range, mode='lines', name='Perfect Prediction',
+            line=dict(color='red', dash='dash', width=2)))
+        fig_avp.update_layout(
+            title="Actual vs Predicted — How Close Are Both Models?",
+            xaxis_title=f"Actual {y_col}",
+            yaxis_title=f"Predicted {y_col}",
+            template="plotly_white", height=500,
+            font=dict(family="Times New Roman"),
+            legend=dict(orientation="h", y=1.08))
+        st.plotly_chart(fig_avp, use_container_width=True)
+
+        # Residual comparison
+        st.markdown("#### Residual Distribution — MLR vs PCR")
+        fig_resid = make_subplots(rows=1, cols=2,
+            subplot_titles=(f"MLR Residuals (RMSE={mlr_rmse:.2f})",
+                            f"PCR Residuals (RMSE={pcr_rmse:.2f})"))
+        fig_resid.add_trace(go.Histogram(
+            x=mlr_residuals, nbinsx=15, marker_color=DARK_BLUE,
+            opacity=0.7, name='MLR'), row=1, col=1)
+        fig_resid.add_trace(go.Histogram(
+            x=pcr_residuals, nbinsx=15, marker_color=GOLD,
+            opacity=0.7, name='PCR'), row=1, col=2)
+        fig_resid.update_layout(
+            template="plotly_white", height=400,
+            font=dict(family="Times New Roman"),
+            showlegend=False)
+        st.plotly_chart(fig_resid, use_container_width=True)
+
+        # PC1 vs PC2 scatter
+        if k_chosen_lab >= 2:
+            st.markdown("#### PC Score Space (PC1 vs PC2)")
+            all_scores = pca.transform(X_std)
+            fig_pc = go.Figure()
+            fig_pc.add_trace(go.Scatter(
+                x=all_scores[:, 0], y=all_scores[:, 1], mode='markers',
+                marker=dict(color=Y, colorscale='Viridis', size=10,
+                    colorbar=dict(title=y_col), line=dict(color='white', width=0.5)),
+                text=[f"{y_col}={yi:.1f}" for yi in Y],
+                hovertemplate="PC1=%{x:.2f}<br>PC2=%{y:.2f}<br>%{text}"))
+            fig_pc.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.3)
+            fig_pc.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.3)
+            fig_pc.update_layout(
+                title=f"PC1 vs PC2 — Coloured by {y_col}",
+                xaxis_title=f"PC1 ({var_ratio_lab[0]:.1f}%)",
+                yaxis_title=f"PC2 ({var_ratio_lab[1]:.1f}%)",
+                template="plotly_white", height=500,
+                font=dict(family="Times New Roman"))
+            st.plotly_chart(fig_pc, use_container_width=True)
+
+        # Final verdict
+        r2_diff = abs(mlr_r2 - pcr_r2)
+        if max(vifs) > 10:
+            verdict = (
+                f"Your data has <strong>severe multicollinearity</strong> (max VIF = {max(vifs):.1f}). "
+                f"PCR fixes this completely while losing only {r2_diff*100:.2f}% R². "
+                f"<strong>PCR is strongly recommended</strong> over plain MLR for this dataset."
+            )
+        elif max(vifs) > 5:
+            verdict = (
+                f"Your data has <strong>moderate multicollinearity</strong> (max VIF = {max(vifs):.1f}). "
+                f"PCR provides cleaner coefficient estimates. R² difference is only {r2_diff*100:.2f}%. "
+                f"PCR is a <strong>good choice</strong> for improved stability."
+            )
+        else:
+            verdict = (
+                f"Your data has <strong>low multicollinearity</strong> (max VIF = {max(vifs):.1f}). "
+                f"Both MLR and PCR perform similarly (R² difference = {r2_diff*100:.2f}%). "
+                f"Plain MLR is fine here, but PCR still works if you want dimensionality reduction."
+            )
+
+        st.markdown(f"""
+        <div class="gold-box">
+            <h4>💡 Verdict for Your Data</h4>
+            <p>{verdict}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    else:
+        st.markdown("""
+        <div style="text-align:center; padding:3rem; color:#888;">
+            <h3>👆 Click "Run MLR & PCA Comparison" to start the analysis</h3>
+            <p>You can run with the default data first, then upload your own file.</p>
+        </div>
+        """, unsafe_allow_html=True)
 
     footer()
